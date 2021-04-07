@@ -1,0 +1,397 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "type": "string",
+      "metadata": {
+        "description": "Location of the resources"
+      },
+      "defaultValue": "[resourceGroup().location]"
+    },
+    "networkInterfaceFrontend": {
+      "type": "string",
+      "defaultValue": "netInterfaceFrontend"
+    },
+    "networkInterfaceDB": {
+      "type": "string",
+      "defaultValue": "netInterfaceDB"
+    },
+    "vNet1Name": {
+      "type": "string",
+      "defaultValue": "dbvnet"
+    },
+    "vNet2Name": {
+      "type": "string",
+      "defaultValue": "appvnet"
+    },
+    "publicIpAddressName": {
+      "type": "string"
+    }
+  },
+  "variables": {
+    "vNet1Subnets": {
+      "prefix": "10.0.0.0/16",
+      "subnet01name": "DBSubnet",
+      "subnet01range": "10.0.0.0/24"
+    },
+    "vNet2Subnets": {
+      "prefix": "192.168.0.0/16",
+      "subnet01name": "BackendSubnet",
+      "subnet01range": "192.168.0.0/24",
+      "subnet02name": "FrontendSubnet",
+      "subnet02range": "192.168.1.0/24"
+    },
+    "vNet1tovNet2PeeringName": "[concat(parameters('vNet1Name'), '-', parameters('vNet2Name'))]",
+    "vNet2tovNet1PeeringName": "[concat(parameters('vNet2Name'), '-', parameters('vNet1Name'))]",
+    "refFrontendSubnet": "[resourceId( 'Microsoft.Network/virtualNetworks/subnets', parameters('vNet2Name'), variables('vNet2Subnets').subnet02name)]",
+    "refDBSubnet": "[resourceId( 'Microsoft.Network/virtualNetworks/subnets', parameters('vNet2Name'), variables('vNet2Subnets').subnet02name)]"
+  },
+  "resources": [
+    {
+      "apiVersion": "2019-02-01",
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "name": "[concat(variables('vNet2Subnets').subnet02name,'-nsg')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "securityRules": [
+          {
+            "name": "https_rule",
+            "properties": {
+              "description": "https_rule",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "443",
+              "sourceAddressPrefix": "*",
+              "destinationAddressPrefix": "*",
+              "access": "Allow",
+              "priority": 123,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "ssh_rule",
+            "properties": {
+              "description": "ssh_rule",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "22",
+              "sourceAddressPrefix": "91.236.5.10",
+              "destinationAddressPrefix": "*",
+              "access": "Allow",
+              "priority": 122,
+              "direction": "Inbound"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "2019-02-01",
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "name": "[concat(variables('vNet2Subnets').subnet01name,'-nsg')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "securityRules": [
+          {
+            "name": "https_rule",
+            "properties": {
+              "description": "https_rule",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "443",
+              "sourceAddressPrefix": "*",
+              "destinationAddressPrefix": "*",
+              "access": "Allow",
+              "priority": 123,
+              "direction": "Inbound"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "2019-02-01",
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "name": "[concat(variables('vNet1Subnets').subnet01name,'-nsg')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "securityRules": [
+          {
+            "name": "ssh_rule",
+            "properties": {
+              "description": "ssh_rule",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "22",
+              "sourceAddressPrefix": "192.168.0.0/16",
+              "destinationAddressPrefix": "*",
+              "access": "Allow",
+              "priority": 122,
+              "direction": "Inbound"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "2020-05-01",
+      "type": "Microsoft.Network/virtualNetworks",
+      "name": "[parameters('vNet1Name')]",
+      "location": "[parameters('location')]",
+      "comments": "This is the first vNet",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/networkSecurityGroups', concat(variables('vNet1Subnets').subnet01name,'-nsg'))]"
+      ],
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": ["[variables('vNet1Subnets').prefix]"]
+        },
+        "subnets": [
+          {
+            "name": "[variables('vNet1Subnets').subnet01name]",
+            "properties": {
+              "addressPrefix": "[variables('vNet1Subnets').subnet01range]",
+              "networkSecurityGroup": {
+                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', 'DBSubnet-nsg')]"
+              }
+            }
+          }
+        ]
+      },
+      "resources": [
+        {
+          "apiVersion": "2020-05-01",
+          "type": "virtualNetworkPeerings",
+          "name": "[variables('vNet1tovNet2PeeringName')]",
+          "location": "[parameters('location')]",
+          "dependsOn": [
+            "[resourceId('Microsoft.Network/virtualNetworks/', parameters('vNet1Name'))]",
+            "[resourceId('Microsoft.Network/virtualNetworks/', parameters('vNet2Name'))]"
+          ],
+          "comments": "This is the peering from vNet 1 to vNet 2",
+          "properties": {
+            "allowVirtualNetworkAccess": true,
+            "allowForwardedTraffic": false,
+            "allowGatewayTransit": false,
+            "useRemoteGateways": false,
+            "remoteVirtualNetwork": {
+              "id": "[resourceId('Microsoft.Network/virtualNetworks',parameters('vNet2Name'))]"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "apiVersion": "2020-05-01",
+      "type": "Microsoft.Network/virtualNetworks",
+      "name": "[parameters('vNet2Name')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/networkSecurityGroups', concat(variables('vNet2Subnets').subnet01name,'-nsg'))]",
+        "[resourceId('Microsoft.Network/networkSecurityGroups', concat(variables('vNet2Subnets').subnet02name,'-nsg'))]"
+      ],
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": ["[variables('vNet2Subnets').prefix]"]
+        },
+        "subnets": [
+          {
+            "name": "[variables('vNet2Subnets').subnet01name]",
+            "properties": {
+              "addressPrefix": "[variables('vNet2Subnets').subnet01range]",
+              "networkSecurityGroup": {
+                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', 'BackendSubnet-nsg')]"
+              }
+            }
+          },
+          {
+            "name": "[variables('vNet2Subnets').subnet02name]",
+            "properties": {
+              "addressPrefix": "[variables('vNet2Subnets').subnet02range]",
+              "networkSecurityGroup": {
+                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', 'FrontendSubnet-nsg')]"
+              }
+            }
+          }
+        ]
+      },
+      "resources": [
+        {
+          "apiVersion": "2020-05-01",
+          "type": "virtualNetworkPeerings",
+          "name": "[variables('vNet2tovNet1PeeringName')]",
+          "location": "[parameters('location')]",
+          "dependsOn": [
+            "[resourceId('Microsoft.Network/virtualNetworks/', parameters('vNet1Name'))]",
+            "[resourceId('Microsoft.Network/virtualNetworks/', parameters('vNet2Name'))]"
+          ],
+          "comments": "This is the peering from vNet 2 to vNet 1",
+          "properties": {
+            "allowVirtualNetworkAccess": true,
+            "allowForwardedTraffic": false,
+            "allowGatewayTransit": false,
+            "useRemoteGateways": false,
+            "remoteVirtualNetwork": {
+              "id": "[resourceId('Microsoft.Network/virtualNetworks',parameters('vNet1Name'))]"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "[parameters('networkInterfaceFrontend')]",
+      "type": "Microsoft.Network/networkInterfaces",
+      "apiVersion": "2018-10-01",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[concat('Microsoft.Network/publicIpAddresses/', parameters('publicIpAddressName'))]",
+        "[resourceId('Microsoft.Network/virtualNetworks/virtualNetworkPeerings', parameters('vNet2Name'), variables('vNet2tovNet1PeeringName'))]"
+      ],
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "subnet": {
+                "id": "[variables('refFrontendSubnet')]"
+              },
+              "privateIPAllocationMethod": "Dynamic",
+              "publicIpAddress": {
+                "id": "[resourceId(resourceGroup().name, 'Microsoft.Network/publicIpAddresses', parameters('publicIpAddressName'))]"
+              }
+            }
+          }
+        ],
+        "networkSecurityGroup": {
+          "id": "[resourceId('Microsoft.Network/networkSecurityGroups', 'FrontendSubnet-nsg')]"
+        }
+      }
+    },
+    {
+      "name": "[parameters('publicIpAddressName')]",
+      "type": "Microsoft.Network/publicIpAddresses",
+      "apiVersion": "2019-02-01",
+      "location": "[parameters('location')]",
+      "properties": {
+        "publicIpAllocationMethod": "Dynamic"
+      },
+      "sku": {
+        "name": "Basic"
+      }
+    },
+    {
+      "name": "wirtualka",
+      "type": "Microsoft.Compute/virtualMachines",
+      "apiVersion": "2020-12-01",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[concat('Microsoft.Network/networkInterfaces/', parameters('networkInterfaceFrontend'))]"
+      ],
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "Standard_DS1_v2"
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "Canonical",
+            "offer": "UbuntuServer",
+            "sku": "18.04-LTS",
+            "version": "latest"
+          }
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', parameters('networkInterfaceFrontend'))]"
+            }
+          ]
+        },
+        "osProfile": {
+          "computerName": "takisekomp",
+          "adminUsername": "kamil123",
+          "adminPassword": "NaprawdeKurn4",
+          "linuxConfiguration": {
+            "patchSettings": {
+              "patchMode": "ImageDefault"
+            }
+          }
+        },
+        "diagnosticsProfile": {
+          "bootDiagnostics": {
+            "enabled": true
+          }
+        }
+      }
+    },
+    {
+      "name": "[parameters('networkInterfaceDB')]",
+      "type": "Microsoft.Network/networkInterfaces",
+      "apiVersion": "2018-10-01",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks/virtualNetworkPeerings', parameters('vNet2Name'), variables('vNet2tovNet1PeeringName'))]"
+      ],
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "subnet": {
+                "id": "[variables('refDBSubnet')]"
+              },
+              "privateIPAllocationMethod": "Dynamic"
+            }
+          }
+        ],
+        "networkSecurityGroup": {
+          "id": "[resourceId('Microsoft.Network/networkSecurityGroups', 'DBSubnet-nsg')]"
+        }
+      }
+    },
+    {
+      "name": "wirtualka2",
+      "type": "Microsoft.Compute/virtualMachines",
+      "apiVersion": "2020-12-01",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[concat('Microsoft.Network/networkInterfaces/', parameters('networkInterfaceDB'))]"
+      ],
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "Standard_DS1_v2"
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "Canonical",
+            "offer": "UbuntuServer",
+            "sku": "18.04-LTS",
+            "version": "latest"
+          }
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', parameters('networkInterfaceDB'))]"
+            }
+          ]
+        },
+        "osProfile": {
+          "computerName": "takisekomp2",
+          "adminUsername": "kamil123",
+          "adminPassword": "NaprawdeKurn4",
+          "linuxConfiguration": {
+            "patchSettings": {
+              "patchMode": "ImageDefault"
+            }
+          }
+        },
+        "diagnosticsProfile": {
+          "bootDiagnostics": {
+            "enabled": true
+          }
+        }
+      }
+    }
+  ]
+}
