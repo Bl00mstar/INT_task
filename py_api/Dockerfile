@@ -18,3 +18,5 @@ ENV PATH=/root/.local:$PATH
 ENV PYTHONPATH /root/
 
 CMD [ "python", "./app.py" ] 
+
+#EXPOSE 5000
