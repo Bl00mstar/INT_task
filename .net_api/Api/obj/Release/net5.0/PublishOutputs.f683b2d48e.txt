@@ -1,0 +1,11 @@
+/home/kkam/Repos/GitHub/INT_task/.net_api/Api/bin/Release/net5.0/publish/Commander
+/home/kkam/Repos/GitHub/INT_task/.net_api/Api/bin/Release/net5.0/publish/appsettings.Development.json
+/home/kkam/Repos/GitHub/INT_task/.net_api/Api/bin/Release/net5.0/publish/appsettings.json
+/home/kkam/Repos/GitHub/INT_task/.net_api/Api/bin/Release/net5.0/publish/Commander.dll
+/home/kkam/Repos/GitHub/INT_task/.net_api/Api/bin/Release/net5.0/publish/Commander.deps.json
+/home/kkam/Repos/GitHub/INT_task/.net_api/Api/bin/Release/net5.0/publish/Commander.runtimeconfig.json
+/home/kkam/Repos/GitHub/INT_task/.net_api/Api/bin/Release/net5.0/publish/Commander.pdb
+/home/kkam/Repos/GitHub/INT_task/.net_api/Api/bin/Release/net5.0/publish/Microsoft.OpenApi.dll
+/home/kkam/Repos/GitHub/INT_task/.net_api/Api/bin/Release/net5.0/publish/Swashbuckle.AspNetCore.Swagger.dll
+/home/kkam/Repos/GitHub/INT_task/.net_api/Api/bin/Release/net5.0/publish/Swashbuckle.AspNetCore.SwaggerGen.dll
+/home/kkam/Repos/GitHub/INT_task/.net_api/Api/bin/Release/net5.0/publish/Swashbuckle.AspNetCore.SwaggerUI.dll
