@@ -1,0 +1,103 @@
+name: $(BuildID)
+
+trigger:
+  - master
+  # - fix/*
+  # - feat/*
+  # - main
+  # - release
+
+pool:
+  vmImage: "ubuntu-latest"
+
+#  _________VARIABLES _________
+variables:
+  stage: development
+
+  #deployment variables
+  serviceConnection: appcon
+  appServiceName: Appreacttest
+
+  #pipeline conditions
+
+#  _________STAGES _________
+stages:
+  #Stage: TESTS
+  - stage: Tests
+    displayName: "Tests"
+    jobs:
+      - job: Audit
+        displayName: Audit
+        steps:
+          - script: npm audit --audit-level=moderate
+            displayName: Audit (Dev)
+            continueOnError: true
+          - script: npm audit --production --audit-level=high
+            displayName: Audit (Prod)
+
+      # - job: UnitTests
+      #   displayName: Unit Tests
+      #   steps:
+      #     - script: npm ci && npm run test
+      #       displayName: Run Tests
+      # - job: Linter
+      #   displayName: Lint Code
+      #   steps:
+      #     - script: npm ci && npm run lint
+      #       displayName: Lint Code
+
+  #Stage: BUILD & PUBLISH
+  - stage: BuildPublishArifact
+    displayName: "Build And Publish Artifact"
+    condition: succeeded('Tests')
+    jobs:
+      - job: Build
+        displayName: Build
+        steps:
+          - script: npm install
+            displayName: Install dependencies
+          - script: set "APP_STAGE=$(stage)" && npm run build
+            displayName: Create build
+
+      - job: CreateArtifact
+        steps:
+          - task: NodeTool@0
+            inputs:
+              versionSpec: "10.x"
+            displayName: "Install Node.js"
+
+          - script: npm install
+            displayName: "npm install"
+
+          - script: set "REACT_APP_STAGE=$(stage)" && npm run build
+            displayName: "npm build"
+
+          - task: CopyFiles@2
+            displayName: "Copy files"
+            inputs:
+              sourceFolder: "build"
+              Contents: "**/*"
+              TargetFolder: "$(Build.ArtifactStagingDirectory)"
+              cleanTargetFolder: true
+
+          - task: ArchiveFiles@2
+            displayName: "Archive files"
+            inputs:
+              rootFolderOrFile: "$(Build.ArtifactStagingDirectory)"
+              includeRootFolder: false
+              archiveType: zip
+              archiveFile: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
+              replaceExistingArchive: true
+
+          - task: PublishBuildArtifacts@1
+            displayName: "Publish Build Artifacts"
+            inputs:
+              pathtoPublish: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
+
+          - task: AzureWebApp@1
+            displayName: "Deploy to App Service"
+            inputs:
+              azureSubscription: "$(serviceConnection)"
+              appName: "$(appServiceName)"
+              appType: "webApp"
+              package: "$(System.ArtifactsDirectory)/$(Build.BuildId).zip"
